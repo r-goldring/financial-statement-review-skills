@@ -24,12 +24,17 @@ and reports exceptions. It is the annual counterpart to the monthly
 The skill flags what doesn't reconcile. A qualified accountant must review every
 exception and exercise judgment. Never represent the tie-out output as assurance.
 
-### 2. Four lanes, distinct tolerances
+### 2. Seven lanes, distinct tolerances
 - Lane 1 (PDF ↔ Bridge): ±$1K simple lines, ±$5K subtotals.
 - Lane 2 (Bridge ↔ TB): ±$1K.
 - Lane 3 (prior-year ↔ last year's issued FS): exact — any delta is a restatement to investigate.
-- Lane 4 (internal cross-refs): exact.
-Distinguish `ties`, `ties-with-rounding`, `ties-with-sign-inversion`, and a true `exception`.
+- Lane 4 (internal cross-refs: BS↔SCF cash, IS↔SCF/SOE net loss, BS equity↔SOE, BS↔footnote totals): exact / ±$5K subtotals.
+- Lane 5 (SOE rollforward): per-class equity columns, balance-row cross-foot, year roll-forward.
+- Lane 6 (footing): every subtotal in every face/footnote table re-summed from its components.
+- Lane 7 (mapping completeness): unmapped TB accounts (a new GL account that would fall off the
+  FS), SUM(mapped)=TB reconciliation, TB integrity, stale mappings, and the balance-sheet identity.
+Distinguish `ties`, `ties-with-rounding`, `ties-with-sign-inversion`, `ties-caption-changed`, and
+a true `exception` (or `unmapped-account` / `restatement`).
 
 ### 3. Company context drives nuance
 Read `references/company-context.md` (your filled-in copy of the template) before
@@ -46,7 +51,9 @@ genuinely unexplained deltas should.
 
 ### 5. Outputs
 - Annotated PDF (`*_TIEOUT.pdf`) with marks: B (bridge), PY (prior year), `/` (internal cross-ref), red box (exception).
-- Exceptions workbook (Summary / Exceptions / All Records).
+- Exceptions workbook with a Summary tab + per-lane review tabs (Bridge Ties, TB Ties, Mapping
+  Completeness, SOE Rollforward, Internal Ties, PY Ties, Footing) + Exceptions + All Records;
+  each tab is sorted findings-first and color-coded by status.
 
 ### 6. ASCII only in any generated CSV/workbook text
 Plain ASCII in machine-read outputs; spell out directional words.

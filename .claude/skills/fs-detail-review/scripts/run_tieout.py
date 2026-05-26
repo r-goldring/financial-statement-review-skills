@@ -48,6 +48,7 @@ TIE_LANE3 = WORK_DIR / "tie-lane3-prior-year.json"
 TIE_LANE4 = WORK_DIR / "tie-lane4-internal.json"
 TIE_LANE5 = WORK_DIR / "tie-lane5-soe-rollforward.json"
 TIE_LANE6 = WORK_DIR / "tie-lane6-footing.json"
+TIE_LANE7 = WORK_DIR / "tie-lane7-mapping.json"
 TIE_CARRY_FWD = WORK_DIR / "tie-carry-forward.json"
 OCR_CACHE = WORK_DIR / "ocr-cache.json"
 FN_PAGE_MAP = WORK_DIR / "fn-page-map.json"
@@ -131,6 +132,12 @@ def main():
                 str(TIE_CARRY_FWD),
                 "--ocr-cache", str(OCR_CACHE),
             ])
+        # Lane 7 (mapping completeness & reasonableness) — TB-account findings, no PDF marks
+        mc_script = SCRIPT_DIR / "tie_out_mapping_completeness.py"
+        if mc_script.exists():
+            run("Step 5.8: lane 7 (mapping completeness)", [
+                PY, str(mc_script), str(INPUTS_JSON), str(TIE_LANE7),
+            ])
     else:
         print("(skipping tie-out lanes)")
 
@@ -161,6 +168,8 @@ def main():
             cmd.append(str(TIE_LANE5))
         if TIE_LANE6.exists():
             cmd.append(str(TIE_LANE6))
+        if TIE_LANE7.exists():
+            cmd.append(str(TIE_LANE7))
         cmd.append("--include-all")
         run("Step 7: exceptions report", cmd)
     else:

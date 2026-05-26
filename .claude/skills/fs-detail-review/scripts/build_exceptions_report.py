@@ -101,6 +101,9 @@ def main():
         "bridge_to_tb": 2,
         "pdf_prior_year": 3,
         "pdf_internal": 4,
+        "soe": 5,
+        "footing": 6,
+        "mapping_completeness": 7,
     }
     exceptions.sort(key=lambda r: (
         lane_order.get(r["lane"], 99),
@@ -366,6 +369,70 @@ def main():
     ws_tb["A3"] = (f"Total: {tb_total}  |  ties: {tb_ties}  |  ties-with-rounding: {tb_round}  |  "
                    f"ties-no-tb-needed: {tb_no_need}  |  exceptions: {tb_exc}  |  no-tb-rollup: {tb_miss}")
     ws_tb["A3"].font = Font(bold=True)
+
+    # ==== Mapping Completeness tab — Lane 7 contextual / "did anything fall off" checks ====
+    mc_records = [r for r in all_records if r.get("lane") == "mapping_completeness"]
+    ws_mc = wb.create_sheet("Mapping Completeness", 1)
+    ws_mc["A1"] = "Mapping Completeness — did every TB account reach the FS, and does it all make sense? (Lane 7)"
+    ws_mc["A1"].font = Font(bold=True, size=13)
+    ws_mc["A2"] = (
+        "'unmapped-account' = TB account with a balance not in the bridge 'TB Mapping' tab (a new account that fell off the FS)  |  "
+        "'mapped-to-nothing' = in the mapping but no FS target  |  'completeness-gap' = gross $ not reaching the FS  |  "
+        "'stale-mapping-target' = mapping points to a BS line that no longer exists  |  'tb-out-of-balance' / 'bs-does-not-balance' = integrity/identity failed  |  "
+        "'ties' = check passed"
+    )
+    ws_mc["A2"].font = Font(italic=True, color="606060")
+    ws_mc.merge_cells("A2:O2")
+    ws_mc.row_dimensions[2].height = 40
+    mc_header_row = 4
+    for c, (label, _) in enumerate(COLUMNS, start=1):
+        cell = ws_mc.cell(row=mc_header_row, column=c, value=label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = border
+
+    def mc_sort_key(r):
+        status = r.get("status", "")
+        priority = {
+            "unmapped-account": 0,
+            "mapped-to-nothing": 1,
+            "completeness-gap": 2,
+            "tb-out-of-balance": 3,
+            "bs-does-not-balance": 4,
+            "stale-mapping-target": 5,
+            "ties": 6,
+        }.get(status, 9)
+        return (priority, r.get("pdf_label") or "")
+    mc_records.sort(key=mc_sort_key)
+
+    for r_idx, rec in enumerate(mc_records, start=mc_header_row + 1):
+        for c_idx, (_, field) in enumerate(COLUMNS, start=1):
+            v = rec.get(field)
+            cell = ws_mc.cell(row=r_idx, column=c_idx, value=v)
+            cell.border = border
+            if field == "status":
+                if v in ("unmapped-account", "completeness-gap", "tb-out-of-balance", "bs-does-not-balance"):
+                    cell.fill = PatternFill(start_color="FCE4E4", end_color="FCE4E4", fill_type="solid")
+                    cell.font = Font(bold=True, color="A52022")
+                elif v in ("mapped-to-nothing", "stale-mapping-target"):
+                    cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+                    cell.font = Font(bold=True, color="9C6500")
+                elif v == "ties":
+                    cell.fill = PatternFill(start_color="DEFADE", end_color="DEFADE", fill_type="solid")
+                    cell.font = Font(color="2A7A2A")
+    for i, w in enumerate(widths, start=1):
+        ws_mc.column_dimensions[get_column_letter(i)].width = w
+    ws_mc.freeze_panes = f"A{mc_header_row + 1}"
+
+    mc_unmapped = sum(1 for r in mc_records if r["status"] == "unmapped-account")
+    mc_nothing = sum(1 for r in mc_records if r["status"] == "mapped-to-nothing")
+    mc_stale = sum(1 for r in mc_records if r["status"] == "stale-mapping-target")
+    mc_fail = sum(1 for r in mc_records if r["status"] in ("completeness-gap", "tb-out-of-balance", "bs-does-not-balance"))
+    mc_verdict = "ALL CLEAR" if (mc_unmapped + mc_nothing + mc_stale + mc_fail) == 0 else "REVIEW NEEDED"
+    ws_mc["A3"] = (f"{mc_verdict}  |  unmapped accounts: {mc_unmapped}  |  mapped-to-nothing: {mc_nothing}  |  "
+                   f"stale targets: {mc_stale}  |  integrity/identity failures: {mc_fail}")
+    ws_mc["A3"].font = Font(bold=True, color=("2A7A2A" if mc_verdict == "ALL CLEAR" else "A52022"))
 
     # ==== SOE Rollforward tab — every Lane 5 SOE record ====
     soe_records = [r for r in all_records if r.get("lane") == "soe"]
