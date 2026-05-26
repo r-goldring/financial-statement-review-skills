@@ -1,0 +1,53 @@
+# Confidential financial-statement source data — never commit
+*.xlsx
+*.xls
+*.xlsm
+*.pdf
+*.docx
+*.doc
+
+# Excel lock/temp files
+~$*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Confidential review outputs (findings reference real dollar amounts and unit counts)
+Reviews/
+
+# Source-data subfolders (extra belt-and-suspenders against accidental commits)
+Prior Year Examples/
+Trial Balance/
+FS Compilation Requests (FS Compilation Partner)/
+a recent acquisition/
+Tieout/
+Past Versions/
+
+# Runtime caches with real extracted data (PDF/bridge/TB text, e.g. lease detail)
+**/.work/
+.work/
+
+# Per-run audit log (real PDF versions, status counts, local paths)
+**/audit_log.json
+.claude/skills/fs-detail-review/audit_log.json
+
+# PRIVATE narrative context — most sensitive file in the repo (acquisition
+# details, control deficiencies, dollar figures, unit counts). Never commit;
+# the public mirror ships a company-context.template.md placeholder instead.
+**/company-context.template.md
+.claude/skills/fs-detail-review/references/company-context.template.md
+
+# Public-mirror tooling dry-run output (regenerated each sync)
+_public_preview/
+**/_public_preview/
+
+# (Note: the source-data patterns above use file extensions that don't conflict with skill
+# source files [.md / .py / .json], so no explicit allowlist needed.)

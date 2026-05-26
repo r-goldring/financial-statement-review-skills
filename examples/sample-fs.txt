@@ -1,0 +1,55 @@
+ACME HOLDINGS LLC
+Consolidated Financial Statements
+For the Year Ended December 31, 2025
+
+[This is a fictional, text-only stand-in for the rendered FS PDF you tie out
+against. In production the skill reads your actual compiled statements PDF; this
+sample lets you see the face-statement values the tie-out lanes compare to the
+bridge and trial balance. All amounts in thousands.]
+
+------------------------------------------------------------------------
+CONSOLIDATED BALANCE SHEETS                            2025        2024
+------------------------------------------------------------------------
+Assets
+  Cash and cash equivalents                          25,000      30,000
+  Accounts receivable, net                            18,000      15,000
+  Prepaid expenses and other current assets            6,000       5,000
+  Property and equipment, net                          9,000      11,000
+  Goodwill                                            32,000      40,000
+  Intangible assets, net                              10,000      19,000
+                                                     -------     -------
+  Total assets                                       100,000     120,000
+
+Liabilities and Members' Equity
+  Accounts payable                                     8,000       7,000
+  Accrued liabilities                                 12,000      13,000
+  Deferred revenue                                    15,000      18,000
+  Long-term debt                                       5,000       7,000
+                                                     -------     -------
+  Total liabilities                                   40,000      45,000
+  Total members' equity                               60,000      75,000
+                                                     -------     -------
+  Total liabilities and members' equity              100,000     120,000
+
+------------------------------------------------------------------------
+CONSOLIDATED STATEMENTS OF OPERATIONS                  2025        2024
+------------------------------------------------------------------------
+  Revenue                                             90,000      80,000
+  Cost of revenue                                     30,000      28,000
+                                                     -------     -------
+  Gross profit                                        60,000      52,000
+  Operating expenses                                  64,000      60,000
+                                                     -------     -------
+  Loss from operations                                (5,000)     (8,000)
+  Net loss                                            (5,000)     (8,000)
+
+------------------------------------------------------------------------
+CONSOLIDATED STATEMENTS OF CASH FLOWS (summary)        2025
+------------------------------------------------------------------------
+  Net loss                                            (4,000)
+  Adjustments and working capital changes               (... )
+  Ending cash and cash equivalents                    25,000
+
+[Note: the Operating expenses line (64,000) and the SCF Net loss (4,000) are
+deliberately INCONSISTENT with the bridge/IS (65,000 and 5,000) so the sample
+exceptions report has something to flag — see examples/sample-tieout-exceptions.csv.]

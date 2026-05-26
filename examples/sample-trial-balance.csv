@@ -1,0 +1,21 @@
+Account,Account Name,Subsidiary,Bridge Line,Debit,Credit,Net Balance
+101000,Cash - Operating,Acme Inc.,Cash and cash equivalents,18000000,0,18000000
+101300,Cash - Canada,Acme Canada,Cash and cash equivalents,6980000,0,6980000
+121000,Accounts Receivable - Trade,Acme Inc.,"Accounts receivable, net",19500000,0,19500000
+129000,Allowance for Doubtful Accounts,Acme Inc.,"Accounts receivable, net",0,1505000,-1505000
+135000,Prepaid Expenses,Acme Inc.,Prepaid expenses and other current assets,6000000,0,6000000
+150000,Property and Equipment,Acme Inc.,"Property and equipment, net",15000000,0,15000000
+159000,Accumulated Depreciation,Acme Inc.,"Property and equipment, net",0,6000000,-6000000
+170000,Goodwill,Acme Inc.,Goodwill,32000000,0,32000000
+175000,Intangible Assets,Acme Inc.,"Intangible assets, net",18000000,0,18000000
+179000,Accumulated Amortization,Acme Inc.,"Intangible assets, net",0,8000000,-8000000
+211000,Accounts Payable - Trade,Acme Inc.,Accounts payable,0,7990000,-7990000
+221000,Accrued Liabilities,Acme Inc.,Accrued liabilities,0,12000000,-12000000
+240000,Deferred Revenue,Acme Inc.,Deferred revenue,0,15000000,-15000000
+260000,Long-term Debt,Acme Inc.,Long-term debt,0,5000000,-5000000
+300000,Members Equity,Acme Holdings LLC,Total members equity,0,59985000,-59985000
+411000,Subscription Revenue,Acme Inc.,Revenue,0,89970000,-89970000
+511000,Cost of Revenue,Acme Inc.,Cost of revenue,30000000,0,30000000
+611000,Salaries and Wages,Acme Inc.,Operating expenses,40000000,0,40000000
+651000,Professional Fees,Acme Inc.,Operating expenses,8000000,0,8000000
+671000,Software and Subscriptions,Acme Inc.,Operating expenses,17000000,0,17000000

@@ -1,0 +1,11 @@
+Lane,PDF Page,Section,Label,Year,PDF Value,Source Ref,Source Label,Source Value,Comparison Unit,Delta,Tolerance,Status,Subtotal,Notes
+1,2,Balance Sheet,Cash and cash equivalents,2025,25000,Bridge BS,Cash and cash equivalents,25000,000s,0,1,ties,No,
+1,2,Balance Sheet,"Accounts receivable, net",2025,18000,Bridge BS,"Accounts receivable, net",18000,000s,0,1,ties,No,
+1,2,Balance Sheet,Total assets,2025,100000,Bridge BS,Total assets,100000,000s,0,5,ties,Yes,Subtotal tolerance applied
+1,3,Income Statement,Revenue,2025,90000,Bridge IS,Revenue,90000,000s,0,1,ties,No,
+1,3,Income Statement,Operating expenses,2025,64000,Bridge IS,Operating expenses,65000,000s,-1000,1,exception,No,PDF shows 64000 vs bridge 65000 - investigate
+2,n/a,Bridge-to-TB,Goodwill,2025,32000,TB rollup,Goodwill,32000,000s,0,1,ties,No,
+2,n/a,Bridge-to-TB,Deferred revenue,2025,15000,TB rollup,Deferred revenue,14500,000s,500,1,exception,No,TB rolls to 14500; bridge 15000 - 500 gap
+3,2,Balance Sheet PY,Total assets,2024,120000,FY24 final FS,Total assets,118000,000s,2000,0,restatement,Yes,FY24 column differs from prior-year issued FS
+4,4,SCF cross-ref,Ending cash,2025,25000,BS Cash,Cash and cash equivalents,25000,000s,0,0,ties,No,SCF ending cash ties to BS
+4,3,SCF cross-ref,Net loss,2025,-5000,IS Net loss,Net loss,-4000,000s,-1000,0,exception,No,SCF net loss does not tie to IS - investigate
