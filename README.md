@@ -74,10 +74,12 @@ scripts/                     # (under the skill) the tie-out pipeline:
   run_tieout.py              #   orchestrator
   build_inputs.py            #   ingest PDF / docx / bridge / TB -> inputs.json
   extract_*.py               #   robust PDF + bridge extractors
-  tie_out_*.py               #   the seven lanes (PDF/bridge, bridge/TB, prior-year,
-                             #   internal cross-refs, SOE, footing, mapping completeness)
+  tie_out_*.py               #   the eight lanes (PDF/bridge, bridge/TB, prior-year,
+                             #   internal cross-refs, SOE, footing, mapping completeness,
+                             #   PBC -> bridge source-to-disclosure)
+  build_pbc_index.py         #   classify + map the PBC source workpapers -> pbc-index.json
   annotate_tieout_pdf.py     #   draw marks on the PDF
-  build_exceptions_report.py #   the exceptions workbook
+  build_exceptions_report.py #   the exceptions workbook (+ PBC Register / PBC Ties tabs)
 examples/                    # fictional Acme Holdings LLC sample data
 ```
 

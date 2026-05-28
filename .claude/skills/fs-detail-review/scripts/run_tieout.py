@@ -49,6 +49,17 @@ TIE_LANE4 = WORK_DIR / "tie-lane4-internal.json"
 TIE_LANE5 = WORK_DIR / "tie-lane5-soe-rollforward.json"
 TIE_LANE6 = WORK_DIR / "tie-lane6-footing.json"
 TIE_LANE7 = WORK_DIR / "tie-lane7-mapping.json"
+TIE_LANE8 = WORK_DIR / "tie-lane8-pbc-to-bridge.json"
+TIE_LANE9 = WORK_DIR / "tie-lane9-tax-provision.json"
+TIE_LANE10 = WORK_DIR / "tie-lane10-flux.json"
+TIE_LANE11 = WORK_DIR / "tie-lane11-tax-recompute.json"
+TIE_LANE12 = WORK_DIR / "tie-lane12-deferred.json"
+TIE_LANE13 = WORK_DIR / "tie-lane13-current-nol.json"
+TIE_LANE14 = WORK_DIR / "tie-lane14-rate-rec.json"
+TIE_LANE15 = WORK_DIR / "tie-lane15-state.json"
+PBC_INDEX = WORK_DIR / "pbc-index.json"
+TAX_TREATMENT_MAP = WORK_DIR / "tax-treatment-map.json"
+PBC_2025 = ROOT / "PBCs" / "2025 Audit"
 TIE_CARRY_FWD = WORK_DIR / "tie-carry-forward.json"
 OCR_CACHE = WORK_DIR / "ocr-cache.json"
 FN_PAGE_MAP = WORK_DIR / "fn-page-map.json"
@@ -79,6 +90,7 @@ def main():
     ap.add_argument("--skip-lanes", action="store_true")
     ap.add_argument("--skip-annotate", action="store_true")
     ap.add_argument("--skip-exceptions", action="store_true")
+    ap.add_argument("--skip-pbc", action="store_true", help="skip PBC index/register/Lane 8")
     ap.add_argument("--pages", default=None, help="restrict annotator to these pages")
     args = ap.parse_args()
 
@@ -86,6 +98,15 @@ def main():
     TIEOUT_DIR.mkdir(parents=True, exist_ok=True)
 
     PY = sys.executable
+
+    # Step 0: PBC index (Phase 0 foundation) — only if a PBC tree is present.
+    pbc_script = SCRIPT_DIR / "build_pbc_index.py"
+    if not args.skip_pbc and pbc_script.exists() and PBC_2025.exists():
+        run("Step 0: build PBC index", [
+            PY, str(pbc_script), "--root", str(PBC_2025), "--out", str(PBC_INDEX),
+        ])
+    elif not PBC_2025.exists():
+        print(f"(no PBC tree at {PBC_2025} — skipping PBC index/register/Lane 8)")
 
     if not args.skip_inputs:
         run("Step 1: build inputs.json", [PY, str(SCRIPT_DIR / "build_inputs.py"), str(INPUTS_JSON)])
@@ -138,6 +159,60 @@ def main():
             run("Step 5.8: lane 7 (mapping completeness)", [
                 PY, str(mc_script), str(INPUTS_JSON), str(TIE_LANE7),
             ])
+        # Lane 8 (PBC -> bridge) — source-to-disclosure; needs the PBC index. No PDF marks.
+        pbc_tie_script = SCRIPT_DIR / "tie_out_pbc_to_bridge.py"
+        if not args.skip_pbc and pbc_tie_script.exists() and PBC_INDEX.exists():
+            run("Step 5.9: lane 8 (PBC -> bridge)", [
+                PY, str(pbc_tie_script), str(INPUTS_JSON), str(PBC_INDEX), str(TIE_LANE8),
+            ])
+        # Lane 9 (tax provision) — FN-07 rate rec / deferreds / book-pretax. Needs PBC index.
+        tax_script = SCRIPT_DIR / "tie_out_tax_provision.py"
+        if not args.skip_pbc and tax_script.exists() and PBC_INDEX.exists():
+            run("Step 5.10: lane 9 (tax provision)", [
+                PY, str(tax_script), str(INPUTS_JSON), str(PBC_INDEX), str(TIE_LANE9),
+            ])
+        # Lane 10 (flux) — YoY analytical review re-baselined to the final FS. Needs PBC index.
+        flux_script = SCRIPT_DIR / "build_flux_analysis.py"
+        if not args.skip_pbc and flux_script.exists() and PBC_INDEX.exists():
+            run("Step 5.11: lane 10 (flux review)", [
+                PY, str(flux_script), str(INPUTS_JSON), str(PBC_INDEX), str(TIE_LANE10),
+            ])
+        # Provision recompute engine (Increment 1: perms). Learn the treatment map from the
+        # multi-year provision workbooks, then independently recompute + red-box drift.
+        map_script = SCRIPT_DIR / "build_tax_treatment_map.py"
+        recompute_script = SCRIPT_DIR / "recompute_tax_provision.py"
+        if not args.skip_pbc and map_script.exists() and recompute_script.exists():
+            run("Step 5.12: provision engine — learn tax-treatment map", [
+                PY, str(map_script), str(INPUTS_JSON), str(TAX_TREATMENT_MAP),
+            ])
+            if TAX_TREATMENT_MAP.exists():
+                run("Step 5.13: provision engine — recompute perms", [
+                    PY, str(recompute_script), str(INPUTS_JSON), str(TAX_TREATMENT_MAP), str(TIE_LANE11),
+                ])
+        # Provision engine Module C: deferred taxes (FS tie + cross-year continuity).
+        deferred_script = SCRIPT_DIR / "recompute_deferred_tax.py"
+        if not args.skip_pbc and deferred_script.exists():
+            run("Step 5.14: provision engine — deferred taxes", [
+                PY, str(deferred_script), str(INPUTS_JSON), str(TIE_LANE12),
+            ])
+        # Provision engine Module D: current tax + NOL (taxable-income build + NOL trend).
+        current_script = SCRIPT_DIR / "recompute_current_nol.py"
+        if not args.skip_pbc and current_script.exists():
+            run("Step 5.15: provision engine — current tax + NOL", [
+                PY, str(current_script), str(TIE_LANE13),
+            ])
+        # Provision engine Module E (capstone): assemble the statutory->effective rate rec.
+        rate_rec_script = SCRIPT_DIR / "recompute_rate_rec.py"
+        if not args.skip_pbc and rate_rec_script.exists():
+            run("Step 5.16: provision engine — rate-rec assembly (capstone)", [
+                PY, str(rate_rec_script), str(INPUTS_JSON), str(TIE_LANE14),
+            ])
+        # Provision engine Module F: state tax rate derivation (apportionment -> blended rate).
+        state_script = SCRIPT_DIR / "recompute_state_tax.py"
+        if not args.skip_pbc and state_script.exists():
+            run("Step 5.17: provision engine — state tax rate", [
+                PY, str(state_script), str(TIE_LANE15),
+            ])
     else:
         print("(skipping tie-out lanes)")
 
@@ -170,7 +245,25 @@ def main():
             cmd.append(str(TIE_LANE6))
         if TIE_LANE7.exists():
             cmd.append(str(TIE_LANE7))
+        if TIE_LANE8.exists():
+            cmd.append(str(TIE_LANE8))
+        if TIE_LANE9.exists():
+            cmd.append(str(TIE_LANE9))
+        if TIE_LANE10.exists():
+            cmd.append(str(TIE_LANE10))
+        if TIE_LANE11.exists():
+            cmd.append(str(TIE_LANE11))
+        if TIE_LANE12.exists():
+            cmd.append(str(TIE_LANE12))
+        if TIE_LANE13.exists():
+            cmd.append(str(TIE_LANE13))
+        if TIE_LANE14.exists():
+            cmd.append(str(TIE_LANE14))
+        if TIE_LANE15.exists():
+            cmd.append(str(TIE_LANE15))
         cmd.append("--include-all")
+        if PBC_INDEX.exists():
+            cmd += ["--pbc-index", str(PBC_INDEX)]
         run("Step 7: exceptions report", cmd)
     else:
         print("(skipping exceptions report)")

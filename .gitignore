@@ -31,6 +31,12 @@ a recent acquisition/
 Tieout/
 Past Versions/
 
+# Full audit PBC set (2024 + 2025): bank statements, invoices, samples, walkthroughs,
+# IT, plus the FS-build workpapers. Entire tree is confidential — never commit (covers
+# any file type, not just the extensions blocked above). The PBC *index* lives in .work/.
+PBCs/
+**/PBCs/
+
 # Runtime caches with real extracted data (PDF/bridge/TB text, e.g. lease detail)
 **/.work/
 .work/
