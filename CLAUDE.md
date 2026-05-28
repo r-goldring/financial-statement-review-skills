@@ -24,7 +24,7 @@ and reports exceptions. It is the annual counterpart to the monthly
 The skill flags what doesn't reconcile. A qualified accountant must review every
 exception and exercise judgment. Never represent the tie-out output as assurance.
 
-### 2. Seven lanes, distinct tolerances
+### 2. Ten checks (eight tie-out lanes + tax + flux modules), distinct tolerances
 - Lane 1 (PDF ↔ Bridge): ±$1K simple lines, ±$5K subtotals.
 - Lane 2 (Bridge ↔ TB): ±$1K.
 - Lane 3 (prior-year ↔ last year's issued FS): exact — any delta is a restatement to investigate.
@@ -33,6 +33,15 @@ exception and exercise judgment. Never represent the tie-out output as assurance
 - Lane 6 (footing): every subtotal in every face/footnote table re-summed from its components.
 - Lane 7 (mapping completeness): unmapped TB accounts (a new GL account that would fall off the
   FS), SUM(mapped)=TB reconciliation, TB integrity, stale mappings, and the balance-sheet identity.
+- Lane 8 (PBC ↔ bridge): each mapped footnote/bridge tab back to its supporting PBC workpaper, and
+  to the GL where the PBC carries a GL column — source-to-disclosure assurance. Flagship check is
+  the 3-way intangibles reconcile; flags the offsetting gross/accum (fully-amortized-asset) gotcha.
+  Runs only when a `PBCs/` tree + the PBC index are present.
+- Lane 9 (tax provision, FN-07): statutory recompute, rate-rec footing, total provision ↔ FS tax
+  expense, book pretax ↔ FS, deferred summary ties + foots (DTA + DTL − VA = net).
+- Lane 10 (flux review): analytical, not a tie. Recomputes YoY movements on the final FS, carries
+  the company's (stale) flux-PBC comments forward as directional context, flags movers with no
+  explanation. Lanes 8–10 run only when a `PBCs/` tree + the PBC index are present.
 Distinguish `ties`, `ties-with-rounding`, `ties-with-sign-inversion`, `ties-caption-changed`, and
 a true `exception` (or `unmapped-account` / `restatement`).
 
