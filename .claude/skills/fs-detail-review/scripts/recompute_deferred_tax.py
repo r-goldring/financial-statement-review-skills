@@ -72,15 +72,25 @@ GROUPING_TO_FS = {
 
 def extract_fs_deferred(inputs):
     """{normalized_label: value_$K} from the FS deferred tax table, plus totals/VA/net.
-    Tracks sign by section (DTL lines stored negative as shown)."""
+    Tracks sign by section (DTL lines stored negative as shown).
+
+    pdf2docx-derived docx files can split the deferred-tax disclosure across multiple
+    tables at page boundaries (DTA list in one, DTL/VA/net in the next). Concatenate
+    the rows of every FN-07 table so the extractor sees the full disclosure regardless
+    of how the source PDF was paginated. A hand-edited docx has it all in one table
+    anyway, so the concat is harmless there.
+    """
     tables = inputs.get("fy25_docx", {}).get("tables", [])
-    target = None
+    fn07_rows = []
+    one_table_rows = None
     for t in tables:
-        rows = t if isinstance(t, list) else t.get("rows", [])
+        rows = t.get("rows", []) if isinstance(t, dict) else (t if isinstance(t, list) else [])
         flat = " ".join(str(c) for r in rows for c in (r if isinstance(r, list) else []) if c).lower()
-        if "total deferred tax assets" in flat and "valuation allowance" in flat:
-            target = rows
-            break
+        if (isinstance(t, dict) and str(t.get("section", "")).startswith("FN-07")):
+            fn07_rows.extend(rows)
+        if "total deferred tax assets" in flat and "valuation allowance" in flat and one_table_rows is None:
+            one_table_rows = rows
+    target = one_table_rows or fn07_rows
     lines, totals = {}, {}
     if not target:
         return lines, totals
