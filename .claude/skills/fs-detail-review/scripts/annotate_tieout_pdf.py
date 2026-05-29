@@ -52,10 +52,10 @@ STATUS_MARK_OVERRIDE = {
     "ties-caption-changed": ("PY*", (0.90, 0.55, 0.10)),  # orange PY* = ties via number, caption changed
 }
 
-EXCEPTION_COLOR = (1.0, 0.0, 0.0)  # bright red
+EXCEPTION_COLOR = (0.10, 0.30, 0.85)  # vivid blue — easy to spot against the red tickmark fill
 TIE_TEXT_COLOR = (0.85, 0.13, 0.15)  # softer red (FY24-style red)
 CARRY_FORWARD_RED = (0.85, 0.13, 0.15)
-CARRY_FORWARD_BLUE = (0.10, 0.30, 0.85)  # vivid blue for "needs review" carry-forwards
+CARRY_FORWARD_BLUE = (0.10, 0.30, 0.85)  # used for "needs review" carry-forwards (when retained)
 
 
 def value_to_search_strings(v):
@@ -304,6 +304,24 @@ def annotate_page(page, pix_dpi, ocr_results, records_for_page):
                 continue
 
             if is_exception:
+                # Highlight the offending value with a red box around its bbox so
+                # real exceptions are visually prominent (vs the small red ! alone).
+                if ocr_bbox:
+                    xs = [p[0] for p in ocr_bbox]
+                    ys = [p[1] for p in ocr_bbox]
+                    bx0, by0, bx1, by1 = min(xs), min(ys), max(xs), max(ys)
+                    pad = 1.5
+                    box_rect = fitz.Rect(bx0 - pad, by0 - pad, bx1 + pad, by1 + pad)
+                    if page.rotation != 0:
+                        derot = page.derotation_matrix
+                        tl = fitz.Point(box_rect.x0, box_rect.y0) * derot
+                        br = fitz.Point(box_rect.x1, box_rect.y1) * derot
+                        box_rect = fitz.Rect(min(tl.x, br.x), min(tl.y, br.y),
+                                              max(tl.x, br.x), max(tl.y, br.y))
+                    try:
+                        page.draw_rect(box_rect, color=EXCEPTION_COLOR, width=1.2)
+                    except Exception:
+                        pass
                 page.insert_text(
                     fitz.Point(place_x, place_y), "!",
                     fontname="helv", fontsize=9, color=EXCEPTION_COLOR,
@@ -360,14 +378,18 @@ def build_footing_status_per_page(all_records):
     return page_status
 
 
-def draw_carry_forward(doc, all_records, drawn_record_ids):
-    """Draw carry-forward records (text marks and drawings ported from FY24 PDF).
+def draw_carry_forward(doc, all_records, drawn_record_ids, drop_unverified=False):
+    """Draw carry-forward records (text marks and drawings ported from a prior tieout PDF).
 
     Each carry-forward text record has pre-computed (x_pt, y_pt) and a color flag.
-    Each carry-forward drawing record has FY24 items (lines) to re-render.
+    Each carry-forward drawing record has prior-PDF items (lines) to re-render.
 
     Override rule: F / xF / V marks on a page where Lane 6 confirmed footing
     are drawn RED regardless of anchor verification.
+
+    If `drop_unverified` is True, carry-forward records whose anchor didn't verify
+    (color == 'blue') are skipped entirely — useful when the source tieout PDF has
+    drifted enough from the target that unverified marks are mostly noise.
     """
     import fitz
     marks_drawn = 0
@@ -377,6 +399,11 @@ def draw_carry_forward(doc, all_records, drawn_record_ids):
 
     for idx, rec in enumerate(all_records):
         if rec.get("lane") != "carry_forward":
+            continue
+        # When the source tieout has drifted from the target, the unverified
+        # 'needs review' (blue) marks land at approximate positions and clutter the
+        # output. Skipping them keeps the annotated PDF aligned and concise.
+        if drop_unverified and rec.get("color") == "blue":
             continue
         page_num = rec.get("pdf_page")
         if not page_num or page_num < 1 or page_num > len(doc):
@@ -486,6 +513,11 @@ def main():
     ap.add_argument("--dpi", type=int, default=200, help="Render DPI for OCR (default 200)")
     ap.add_argument("--ocr-cache", default=None, help="Cache OCR results to this JSON path")
     ap.add_argument("--pages", default=None, help="Restrict to these pages (comma-separated)")
+    ap.add_argument("--drop-unverified-carry-forward", action="store_true",
+                    help="Skip carry-forward records whose anchor text didn't verify in "
+                         "the target PDF (color=='blue'). Useful when the carry-forward "
+                         "source is a draft that has drifted from the target — keeps the "
+                         "annotated PDF clean of misaligned 'needs review' marks.")
     args = ap.parse_args()
 
     import fitz
@@ -561,7 +593,8 @@ def main():
 
     # First pass: draw all CARRY_FORWARD records (text + drawings) — these don't need OCR
     # because they have pre-computed coords.
-    cf_drawn = draw_carry_forward(doc, all_records, drawn_record_ids)
+    cf_drawn = draw_carry_forward(doc, all_records, drawn_record_ids,
+                                   drop_unverified=args.drop_unverified_carry_forward)
     total_marks += cf_drawn
     print(f"  carry-forward marks drawn: {cf_drawn}")
 
@@ -575,6 +608,10 @@ def main():
         # Filter out records already drawn elsewhere
         records_for_page = [(idx, r) for idx, r in records_for_page if idx not in drawn_record_ids]
         if not records_for_page:
+            continue
+        # Defensive: records sourced from a different-paginated PDF (e.g. a prior
+        # tieout with N+1 pages) can reference page indexes past the target doc.
+        if page_num < 1 or page_num > len(doc):
             continue
         page = doc[page_num - 1]
         cache_key = f"page-{page_num}"

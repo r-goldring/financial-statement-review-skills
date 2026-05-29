@@ -37,9 +37,9 @@ WORK_DIR = SKILL_DIR / ".work"
 
 # Path defaults — change here when bridge/PDF version updates
 ROOT = Path(r"C:\path\to\financial-statement-review")
-FY25_PDF = ROOT / "Tieout" / "v2 Tieout 5.22.2026 version" / "9. vYYYY.M.D_Acme Holdings LLC 2025 Financial Statements (DRAFT)_clean.pdf"
-FY25_VERSION = "vYYYY.M.D"
-TIEOUT_DIR = ROOT / "Tieout" / "v2 Tieout 5.22.2026 version"
+FY25_PDF = ROOT / "Tieout" / "vfinal Tieou" / "Acme Holdings, LLC 2025 Financial Statements.pdf"
+FY25_VERSION = "vFinal"
+TIEOUT_DIR = ROOT / "Tieout" / "vfinal Tieou"
 
 INPUTS_JSON = WORK_DIR / "inputs.json"
 TIE_LANE1 = WORK_DIR / "tie-lane1-pdf-to-bridge.json"
@@ -65,6 +65,31 @@ OCR_CACHE = WORK_DIR / "ocr-cache.json"
 FN_PAGE_MAP = WORK_DIR / "fn-page-map.json"
 FY24_TIEOUT_PDF = ROOT / "Prior Year Examples" / "2024" / "Tieout" / "vYYYY.M.D_Acme Holdings LLC 2024 Financial Statements Tieout (FINAL).pdf"
 ANNOTATED_PDF = TIEOUT_DIR / FY25_PDF.name.replace(".pdf", "_TIEOUT.pdf")
+
+
+def find_carry_forward_source():
+    """Prefer a prior-period tieout PDF that lives in the same TIEOUT_DIR (e.g. the
+    user dropped a hand-annotated v5.21 tieout into the vfinal folder before running
+    against the final FS) — those marks anchor much more cleanly than FY24's against
+    the current PDF. Falls back to FY24_TIEOUT_PDF if no local prior tieout exists.
+
+    Match criterion: a .pdf in TIEOUT_DIR that is NOT the FY25 input itself and NOT
+    the annotated output, with 'Tieout' in the filename (case-insensitive). The most
+    recently modified candidate wins.
+    """
+    if not TIEOUT_DIR.exists():
+        return FY24_TIEOUT_PDF
+    cands = []
+    excluded = {FY25_PDF.name, ANNOTATED_PDF.name}
+    for p in TIEOUT_DIR.glob("*.pdf"):
+        if p.name in excluded:
+            continue
+        if "tieout" in p.name.lower():
+            cands.append(p)
+    if not cands:
+        return FY24_TIEOUT_PDF
+    cands.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return cands[0]
 EXCEPTIONS_XLSX = TIEOUT_DIR / f"Tieout Exceptions - {FY25_VERSION}.xlsx"
 AUDIT_LOG = SKILL_DIR / "audit_log.json"
 
@@ -92,6 +117,10 @@ def main():
     ap.add_argument("--skip-exceptions", action="store_true")
     ap.add_argument("--skip-pbc", action="store_true", help="skip PBC index/register/Lane 8")
     ap.add_argument("--pages", default=None, help="restrict annotator to these pages")
+    ap.add_argument("--keep-unverified-carry-forward", action="store_true",
+                    help="keep carry-forward marks whose anchors didn't verify in the "
+                         "current PDF (drawn in blue). Default drops them for a cleaner "
+                         "annotated PDF when the carry-forward source has drifted.")
     args = ap.parse_args()
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
@@ -146,10 +175,13 @@ def main():
             ])
         # Carry-forward FY24 marks (text + drawings) — RED if verified, BLUE if needs review
         cf_script = SCRIPT_DIR / "carry_forward_fy24_marks.py"
-        if cf_script.exists() and FY24_TIEOUT_PDF.exists():
-            run("Step 5.7: carry-forward FY24 marks", [
+        cf_source = find_carry_forward_source()
+        if cf_script.exists() and cf_source.exists():
+            label = "carry-forward marks" + (
+                " (from local prior tieout)" if cf_source.parent == TIEOUT_DIR else " (from FY24 final)")
+            run(f"Step 5.7: {label}", [
                 PY, str(cf_script),
-                str(FY24_TIEOUT_PDF), str(FY25_PDF),
+                str(cf_source), str(FY25_PDF),
                 str(TIE_CARRY_FWD),
                 "--ocr-cache", str(OCR_CACHE),
             ])
@@ -227,6 +259,11 @@ def main():
         if TIE_CARRY_FWD.exists():
             cmd.append(str(TIE_CARRY_FWD))
         cmd += ["--ocr-cache", str(OCR_CACHE)]
+        # Default: drop unverified carry-forward marks so the annotated PDF only carries
+        # marks whose anchors were verified against the current PDF. Use --keep-unverified
+        # to restore the old behavior of drawing them in blue.
+        if not args.keep_unverified_carry_forward:
+            cmd.append("--drop-unverified-carry-forward")
         if args.pages:
             cmd += ["--pages", args.pages]
         run("Step 6: annotate PDF", cmd)

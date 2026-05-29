@@ -46,8 +46,13 @@ def extract_pdf_rows_from_docx_table(table):
     header_row_idx = None
     for i, row in enumerate(rows[:5]):
         row_year_cells = {}
+        # Allow col 0 if it itself is a 'YYYY' string (a stand-alone year-header row,
+        # which pdf2docx emits when the source PDF rendered the year row without a
+        # leading label cell). Same carve-out as Lane 1.
+        col0_is_year = (len(row) > 0 and isinstance(row[0], str)
+                        and bool(re.match(r"^20\d{2}$", row[0].strip())))
         for c_idx, cell in enumerate(row):
-            if c_idx == 0:
+            if c_idx == 0 and not col0_is_year:
                 continue
             if cell and isinstance(cell, str):
                 stripped = cell.strip()
@@ -59,6 +64,16 @@ def extract_pdf_rows_from_docx_table(table):
             break
     if not year_cols or header_row_idx is None:
         return []
+    # If header was label-less but data rows have labels, year columns are shifted
+    # by one relative to data — same shift fix as Lane 1.
+    if 0 in year_cols:
+        for sample in rows[header_row_idx + 1:header_row_idx + 6]:
+            if not sample or not sample[0] or not isinstance(sample[0], str):
+                continue
+            s0 = sample[0].strip()
+            if s0 and not re.match(r"^20\d{2}$", s0) and not re.match(r"^[\-+]?[\d,.()]+$", s0):
+                year_cols = {c_idx + 1: yr for c_idx, yr in year_cols.items()}
+                break
     out = []
     for row in rows[header_row_idx + 1:]:
         if not row:

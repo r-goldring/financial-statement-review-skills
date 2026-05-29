@@ -51,7 +51,10 @@ FN_TO_BRIDGE = {
     "FN-04-intangibleassetsandgoodw": "FN - Intangibles",
     "FN-05-accruedexpensesandotherc": "FN - Accrued Expenses",
     "FN-06-termloansandlineofcredit": "FN - Debt",
-    "FN-07-incometaxes": "FN- Taxes",  # note: bridge tab has typo "FN- Taxes" (no space)
+    # Bridge tab spelling: v5.21 used "FN- Taxes" (typo, no space after FN), the
+    # compiler corrected to "FN - Taxes" in the final. Try the corrected form first,
+    # then fall back to the typo (handled by bridge_tabs lookup at consumer site).
+    "FN-07-incometaxes": "FN - Taxes",
     "FN-08-membersequity": "FN - Members Equity",
     "FN-09-stockbasedcompensation": "FN - SBC",
     "FN-10-commitmentsandcontingenc": None,  # narrative
@@ -60,6 +63,30 @@ FN_TO_BRIDGE = {
     "FN-13-employeebenefitplan": "FN - 401(k)",
     "FN-14-subsequentevents": "FN Sub Events",
 }
+
+# Bridge tab names sometimes change between versions (typo fixes, renames). Try the
+# canonical name first; if absent, fall back to a known alias.
+BRIDGE_TAB_ALIASES = {
+    "FN - Taxes": ["FN- Taxes"],   # v5.21 had the typo "FN- Taxes" (no space)
+    "FN - PPE": ["FN- PPE"],
+    "FN - Intangibles": ["FN- Intangibles"],
+    "FN - Debt": ["FN- Debt"],
+    "FN - Accrued Expenses": ["FN- Accrued Expenses"],
+    "FN - Members Equity": ["FN- Members Equity"],
+    "FN - SBC": ["FN- SBC"],
+    "FN - Leases": ["FN- Leases"],
+    "FN - 401(k)": ["FN- 401(k)"],
+}
+
+
+def resolve_bridge_tab(bridge_tabs, name):
+    """Return the bridge_tabs entry for `name`, trying known aliases as a fallback."""
+    if name in bridge_tabs:
+        return name, bridge_tabs[name]
+    for alias in BRIDGE_TAB_ALIASES.get(name, []):
+        if alias in bridge_tabs:
+            return alias, bridge_tabs[alias]
+    return None, None
 
 
 def extract_pdf_rows(table):
@@ -83,9 +110,17 @@ def extract_pdf_rows(table):
     header_row_idx = None
     for i, row in enumerate(rows[:5]):
         row_year_cells = {}
+        # Col 0 normally holds a label — but if col 0 itself is a 'YYYY' string,
+        # this is a stand-alone year-header row (common when the docx was generated
+        # from a PDF, where the year row is rendered without a leading label cell).
+        # In that case include col 0 too. The "year-as-row-label" trap (e.g. an
+        # amortization schedule row ['2026', amount, amount]) is still avoided
+        # because such rows have only ONE year cell — we still require >=2.
+        col0_is_year = (len(row) > 0 and isinstance(row[0], str)
+                        and re.match(r"^20\d{2}$", row[0].strip()))
         for c_idx, cell in enumerate(row):
-            if c_idx == 0:
-                continue  # skip col 0
+            if c_idx == 0 and not col0_is_year:
+                continue
             if cell and isinstance(cell, str):
                 stripped = cell.strip()
                 if re.match(r"^20\d{2}$", stripped):
@@ -96,6 +131,20 @@ def extract_pdf_rows(table):
             break
     if not year_cols or header_row_idx is None:
         return []
+
+    # If the header row was label-less (col 0 was a year — the carve-out above) but
+    # subsequent data rows DO have a label at col 0, the year columns are shifted by
+    # one relative to data. Detect by sampling the first data row: if col 0 looks
+    # like a non-year text label, shift year_cols indices by +1.
+    if 0 in year_cols:
+        for sample in rows[header_row_idx + 1:header_row_idx + 6]:
+            if not sample or not sample[0] or not isinstance(sample[0], str):
+                continue
+            s0 = sample[0].strip()
+            if s0 and not re.match(r"^20\d{2}$", s0) and not re.match(r"^[\-+]?[\d,.()]+$", s0):
+                # data rows have a label column the header didn't — shift years right
+                year_cols = {c_idx + 1: yr for c_idx, yr in year_cols.items()}
+                break
 
     out = []
     for row in rows[header_row_idx + 1:]:
@@ -133,8 +182,11 @@ def extract_bridge_rows(bridge_tab):
     header_row_idx = None
     for i, row in enumerate(rows[:10]):
         row_year_cells = {}
+        # Same col-0 / stand-alone year-header carve-out as the face-statement parser.
+        col0 = row[0] if len(row) > 0 else None
+        col0_is_year = (isinstance(col0, str) and bool(re.match(r"^20\d{2}$", col0.strip())))
         for c_idx, cell in enumerate(row):
-            if c_idx == 0:
+            if c_idx == 0 and not col0_is_year:
                 continue
             if cell is None:
                 continue
@@ -363,6 +415,117 @@ def find_value_in_bridge_with_context(bridge_tab, target_value_K, is_subtotal, p
     }
 
 
+def extract_fn_row_values(pdf_table):
+    """Fallback row extractor for footnote tables that use **column-name headers**
+    (e.g. 'Gross Carrying Amount / Accumulated Amortization / Net Carrying Amount')
+    instead of year headers.
+
+    Returns [{label, values:[(col_idx, value), ...]}, ...] — every row with at least
+    one parseable numeric cell, using the first non-numeric string on the row as the
+    label. Column-header rows have no numeric cells and are filtered out automatically.
+    """
+    out = []
+    for row in pdf_table.get("rows", []):
+        if not row:
+            continue
+        label = None
+        values = []
+        for c_idx, cell in enumerate(row):
+            v = parse_value(cell)
+            if v is not None:
+                values.append((c_idx, v))
+            elif label is None and isinstance(cell, str) and cell.strip() and len(cell.strip()) >= 4:
+                label = cell.strip()
+        # Header rows have no numeric values → skip. Rows missing a label can't tie.
+        if label and values:
+            out.append({"label": label, "values": values})
+    return out
+
+
+def tie_fn_section_by_values(pdf_table, bridge_tab, section, bridge_name, fn_page=None):
+    """Fallback FN tying: when the table has column-name headers (not year headers),
+    extract_pdf_rows returns nothing. Instead, for each (label, value) we search the
+    bridge tab for a matching value with label-similarity context (same pattern as
+    Lane 1's caption-changed secondary match).
+
+    Conservative: requires label similarity >= 0.5 (the same threshold the secondary
+    match uses to gate caption-changed acceptance) OR a unique large-value candidate.
+    """
+    records = []
+    rows = extract_fn_row_values(pdf_table)
+    for r in rows:
+        label = r["label"]
+        is_sub = is_subtotal_label(label)
+        for c_idx, v in r["values"]:
+            if v == 0:
+                continue  # zeros match any '-' placeholder; too risky
+            match = find_value_in_bridge_with_context(
+                bridge_tab, target_value_K=v, is_subtotal=is_sub, pdf_label=label,
+            )
+            if not match:
+                continue
+            score = match.get("similarity_score", 0) or 0
+            unique_large = (match.get("n_candidates", 0) == 1 and abs(v) >= 50)
+            if score < 0.5 and not unique_large:
+                continue
+            delta = match["value_K"] - v
+            tol = 5.0 if is_sub else 1.0
+            status = ("ties" if abs(delta) <= tol
+                      else "ties-with-rounding" if abs(delta) <= tol * 5
+                      else "exception")
+            records.append(make_record(
+                "pdf_to_bridge",
+                pdf_section=section, pdf_page=fn_page,
+                pdf_label=label, pdf_year=None, pdf_value=v,
+                source_ref=f"bridge!{bridge_tab['name']}",
+                source_label=match.get("nearby_label") or label,
+                source_value=round(match["value_K"], 1),
+                comparison_unit="$K", delta=round(delta, 1),
+                tolerance=tol, status=status, is_subtotal=is_sub,
+                notes=("FN value-match (column-name-header table) — "
+                       f"score={score:.2f}, candidates={match.get('n_candidates', 0)}"),
+            ))
+    return records
+
+
+def _try_fn_spillover(pdf_table, bridge_tabs, fn_page_map, current_section):
+    """Section-spillover rescue: when a table's assigned section produced 0 ties
+    (often because pdf2docx missed a 'Note N' header and tables for the next FN got
+    tagged with the previous section), try the OTHER FN bridges and claim the table
+    for the one that returns the most ties — provided it clears a minimum-evidence
+    threshold so we don't false-positive on a single coincidental value match.
+
+    Returns (records, claimed_label) or ([], None) if no bridge gives enough ties.
+    """
+    MIN_TIES_TO_CLAIM = 3
+    best_records = []
+    best_label = None
+    best_section = None
+    for cand_section, cand_bridge_name in FN_TO_BRIDGE.items():
+        if cand_bridge_name is None or cand_section == current_section:
+            continue
+        _, cand_tab = resolve_bridge_tab(bridge_tabs, cand_bridge_name)
+        if cand_tab is None:
+            continue
+        cand_page = fn_page_map.get(cand_section)
+        cand_records = tie_fn_section_by_values(
+            pdf_table, cand_tab, cand_section, cand_bridge_name, cand_page,
+        )
+        ties = sum(1 for r in cand_records if r["status"] in ("ties", "ties-with-rounding"))
+        if ties >= MIN_TIES_TO_CLAIM and ties > len(best_records):
+            best_records = cand_records
+            best_label = cand_bridge_name
+            best_section = cand_section
+    if best_section:
+        # Stamp the claimed section's page on records that don't already have one.
+        page = fn_page_map.get(best_section)
+        if page is not None:
+            for r in best_records:
+                if r.get("pdf_page") is None:
+                    r["pdf_page"] = page
+    return best_records, best_label
+
+
 def tie_section(pdf_table, bridge_tab, section, source_section_label):
     """Tie one section: a single .docx table ↔ a single bridge tab."""
     records = []
@@ -516,19 +679,49 @@ def main():
     for section, bridge_name in FN_TO_BRIDGE.items():
         if bridge_name is None:
             continue
-        pdf_section_tables = [t for t in docx_tables if t["section"] == section]
+        # Match by FN-NN prefix — section titles depend on the docx loader's truncation
+        # of the heading text, which differs between hand-edited docx and pdf2docx-derived
+        # docx (e.g. "FN-03-propertyandequipmentnet" vs "FN-03-propertyandequipmentnett").
+        # The numeric prefix is canonical, so match on that.
+        prefix = "-".join(section.split("-", 2)[:2]) + "-"  # "FN-03-"
+        pdf_section_tables = [t for t in docx_tables if t.get("section", "").startswith(prefix)]
         if not pdf_section_tables:
             continue
-        if bridge_name not in bridge_tabs:
+        resolved_name, bridge_tab = resolve_bridge_tab(bridge_tabs, bridge_name)
+        if bridge_tab is None:
             print(f"  ⚠ FN bridge tab '{bridge_name}' not found (for section {section})")
             continue
-        bridge_tab = bridge_tabs[bridge_name]
+        if resolved_name != bridge_name:
+            print(f"  (resolved bridge tab '{bridge_name}' -> '{resolved_name}' via alias)")
         # Resolve pdf_page from fn_page_map (set later on records produced by tie_section)
         fn_page = fn_page_map.get(section)
         for pdf_table in pdf_section_tables:
             records = tie_section(pdf_table, bridge_tab, section, bridge_name)
-            # If we have a FN page mapping, stamp it on every record from this section
-            if fn_page is not None:
+            via = "year-hdr"
+            # If the table has column-name headers (not year headers) — common in
+            # FN disclosures and in pdf2docx-derived docx — extract_pdf_rows returns
+            # nothing. Fall back to value-search tying (label + value -> bridge cell
+            # via similarity-scored secondary match).
+            if not records:
+                records = tie_fn_section_by_values(pdf_table, bridge_tab, section, bridge_name, fn_page)
+                via = "value-match" if records else "year-hdr"
+            # Section-spillover: a single page-break in pdf2docx output can collapse
+            # 'Note 8'..'Note 14' headers into the previous FN section's tag (e.g. FN-09
+            # SBC tables and FN-11 Leases tables end up tagged FN-07). If this table
+            # produced 0 ties to its assigned bridge, try the remaining FN bridges and
+            # claim the table for whichever returns >= 3 ties.
+            if not records:
+                records, claimed = _try_fn_spillover(pdf_table, bridge_tabs, fn_page_map, section)
+                if records:
+                    via = f"spillover->{claimed}"
+            if fn_page is not None and via != "year-hdr" and not via.startswith("spillover"):
+                for r in records:
+                    if r.get("pdf_page") is None:
+                        r["pdf_page"] = fn_page
+            elif via.startswith("spillover") and not all(r.get("pdf_page") for r in records):
+                # spillover records already have pdf_page from the claimed FN section
+                pass
+            elif fn_page is not None:
                 for r in records:
                     if r.get("pdf_page") is None:
                         r["pdf_page"] = fn_page
@@ -538,7 +731,7 @@ def main():
                 exc = sum(1 for r in records if r["status"] == "exception")
                 miss = sum(1 for r in records if "missing" in r["status"])
                 page_note = f" page={fn_page}" if fn_page else ""
-                print(f"  {section:<32} (table {pdf_table['idx']}, {pdf_table['row_count']}r) <-> '{bridge_name}'  total={len(records)}  ties={ties}  exc={exc}  miss={miss}{page_note}")
+                print(f"  {section:<32} (table {pdf_table['idx']}, {pdf_table['row_count']}r, {via}) <-> '{bridge_name}'  total={len(records)}  ties={ties}  exc={exc}  miss={miss}{page_note}")
 
     # === Secondary number-only match (rescues caption-changed ties) ===
     # For every non-tie record, search the same bridge tab for the PDF value with

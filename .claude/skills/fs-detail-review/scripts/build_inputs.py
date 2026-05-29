@@ -39,9 +39,9 @@ from extract_fs_pdf import extract_fs_pdf
 # ---------- Path constants (FY25 inputs) ----------
 ROOT = Path(r"C:\path\to\financial-statement-review")
 
-FY25_PDF = ROOT / "Tieout" / "v2 Tieout 5.22.2026 version" / "9. vYYYY.M.D_Acme Holdings LLC 2025 Financial Statements (DRAFT)_clean.pdf"
-FY25_DOCX = ROOT / "Tieout" / "v2 Tieout 5.22.2026 version" / "9. vYYYY.M.D_Acme Holdings LLC 2025 Financial Statements (DRAFT)_comments addressed.docx"
-FY25_BRIDGE = ROOT / "Tieout" / "v2 Tieout 5.22.2026 version" / "WORKING_Acme 2025 FS Bridge_Partial InScope Updates (2).xlsx"
+FY25_PDF = ROOT / "Tieout" / "vfinal Tieou" / "Acme Holdings, LLC 2025 Financial Statements.pdf"
+FY25_DOCX = ROOT / "Tieout" / "vfinal Tieou" / "Acme Holdings, LLC 2025 Financial Statements.docx"
+FY25_BRIDGE = ROOT / "Tieout" / "vfinal Tieou" / "9. vYYYY.M.D_Acme Corp 2025 FS Bridge_Partial InScope Updates (vF).xlsx"
 TB_CONSOLIDATED = ROOT / "Trial Balance" / "Consolidated TB FY25 v4.14.26.xlsx"
 TB_BY_SUBSIDIARY = ROOT / "Trial Balance" / "TB by Subsidiary FY25 v4.15.26.xlsx"
 FY24_FINAL_PDF = ROOT / "Prior Year Examples" / "2024" / "Financial Statements_FINAL" / "Acme Holdings LLC 2024 Financial Statements.pdf"
@@ -217,9 +217,45 @@ def load_fy25_docx(path):
                 "text": el["text"],
             })
 
+    # pdf2docx (used when the source is a final PDF instead of a hand-edited docx)
+    # emits the dollar sign on $-prefixed amounts as a standalone cell — so a row like
+    # "Cash $X,XXX.XX $X,XXX.XX" becomes 5 cells: [label, '$', 'NN,NNN', '$', 'NN,NNN'],
+    # while non-$ rows stay 3 cells. The lane parsers expect uniform shape, so drop
+    # standalone single-character marker cells ('$', '(', ')'). Harmless on a
+    # hand-edited docx (those cells don't exist there).
+    _MARKERS = {"$", "(", ")", ""}
+    for t in tables_out:
+        cleaned = []
+        for row in t.get("rows", []):
+            cleaned.append([c for c in row if str(c).strip() not in _MARKERS])
+        t["rows"] = cleaned
+        t["row_count"] = len(cleaned)
+
+    # Face statements (BS/IS/SOE/SCF) are logically one table per section, but if the
+    # docx was generated from a PDF (e.g. pdf2docx) the table can be split at page
+    # boundaries into several. Lanes 1/3/4/6 take the first matching table per
+    # section, so a split breaks them. Merge those rows back into one logical table.
+    # Footnote tables stay separate — each FN disclosure is its own table.
+    FACE_SECTIONS = {"BS", "IS", "SOE", "SCF"}
+    merged_out = []
+    by_section = {}
+    for t in tables_out:
+        sec = t.get("section")
+        if sec in FACE_SECTIONS:
+            by_section.setdefault(sec, []).append(t)
+        else:
+            merged_out.append(t)
+    for sec, parts in by_section.items():
+        rows = [r for p in parts for r in p.get("rows", [])]
+        first = parts[0]
+        merged_out.append({**first, "rows": rows, "row_count": len(rows),
+                           "merged_from": [p["idx"] for p in parts] if len(parts) > 1 else None})
+    # Keep emission ordered by original idx for stability.
+    merged_out.sort(key=lambda t: t.get("idx", 0))
+
     return {
         "path": str(path),
-        "tables": tables_out,
+        "tables": merged_out,
         "paragraphs": paragraphs_out,
         "section_summary": _summarize_sections(elements_with_section),
     }
